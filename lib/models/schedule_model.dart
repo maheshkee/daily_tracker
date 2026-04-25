@@ -33,12 +33,18 @@ class TaskBlock {
     };
   }
 
-  TaskBlock copyWith({bool? isCompleted}) {
+  TaskBlock copyWith({
+    String? label,
+    String? time,
+    String? task,
+    int? points,
+    bool? isCompleted,
+  }) {
     return TaskBlock(
-      label: label,
-      time: time,
-      task: task,
-      points: points,
+      label: label ?? this.label,
+      time: time ?? this.time,
+      task: task ?? this.task,
+      points: points ?? this.points,
       isCompleted: isCompleted ?? this.isCompleted,
     );
   }

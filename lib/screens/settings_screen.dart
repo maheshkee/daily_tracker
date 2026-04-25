@@ -19,7 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json', 'csv', 'xlsx'],
+        allowedExtensions: ['json', 'csv', 'xlsx', 'txt', 'pdf', 'docx'],
       );
 
       if (result != null) {
@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         WeekPlan newPlan = await _importEngine.parseFile(path);
         
         if (mounted) {
-          _showPreviewDialog(newPlan);
+          _showEditablePreviewDialog(newPlan);
         }
       }
     } catch (e) {
@@ -39,45 +39,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showPreviewDialog(WeekPlan plan) {
+  void _showEditablePreviewDialog(WeekPlan plan) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: Text(plan.weekIdentifier, style: const TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: plan.days.length,
-            itemBuilder: (context, index) {
-              final day = plan.days[index];
-              return ListTile(
-                title: Text(day.day, style: const TextStyle(color: Color(0xFFBB86FC))),
-                subtitle: Text('${day.tasks.length} tasks identified', style: const TextStyle(color: Colors.grey)),
-              );
-            },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: Text(plan.weekIdentifier, style: const TextStyle(color: Colors.white, fontSize: 18))),
+              const Icon(Icons.edit, color: Colors.grey, size: 20),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBB86FC)),
-            onPressed: () async {
-              await _planService.savePlan(plan);
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Universal Plan Applied!')),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView.builder(
+              itemCount: plan.days.length,
+              itemBuilder: (context, dayIdx) {
+                final day = plan.days[dayIdx];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Text(day.day, style: const TextStyle(color: Color(0xFFBB86FC), fontWeight: FontWeight.bold)),
+                    ),
+                    ...day.tasks.asMap().entries.map((entry) {
+                      int taskIdx = entry.key;
+                      TaskBlock task = entry.value;
+                      bool isUncertain = task.label == 'Activity';
+                      
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isUncertain ? Colors.orange.withValues(alpha: 0.1) : Colors.black26,
+                          borderRadius: BorderRadius.circular(8),
+                          border: isUncertain ? Border.all(color: Colors.orange.withValues(alpha: 0.5)) : null,
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                                    decoration: const InputDecoration(isDense: true, labelText: 'Label', labelStyle: TextStyle(color: Colors.grey)),
+                                    controller: TextEditingController(text: task.label),
+                                    onChanged: (val) => plan.days[dayIdx].tasks[taskIdx] = task.copyWith(label: val),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                                    decoration: const InputDecoration(isDense: true, labelText: 'Time', labelStyle: TextStyle(color: Colors.grey)),
+                                    controller: TextEditingController(text: task.time),
+                                    onChanged: (val) => plan.days[dayIdx].tasks[taskIdx] = task.copyWith(time: val),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (isUncertain)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 4),
+                                child: Text('⚠️ Uncertain task type', style: TextStyle(color: Colors.orange, fontSize: 10)),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
                 );
-              }
-            },
-            child: const Text('APPLY PLAN', style: TextStyle(color: Colors.black)),
+              },
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBB86FC)),
+              onPressed: () async {
+                await _planService.savePlan(plan);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Semantic Plan Applied!')),
+                  );
+                }
+              },
+              child: const Text('APPLY PLAN', style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -106,14 +164,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'UNIVERSAL IMPORT ENGINE',
+              'UNIVERSAL SEMANTIC IMPORT',
               style: TextStyle(color: Colors.grey, letterSpacing: 1.2, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 15),
             _buildSettingsTile(
-              icon: Icons.auto_awesome,
-              title: 'Universal Import',
-              subtitle: 'Import JSON, CSV, or XLSX',
+              icon: Icons.psychology,
+              title: 'Semantic Import',
+              subtitle: 'Import PDF, DOCX, TXT, XLSX',
               onTap: _importPlan,
             ),
             const SizedBox(height: 10),
