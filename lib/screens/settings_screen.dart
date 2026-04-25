@@ -1,9 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/schedule_model.dart';
 import '../services/plan_service.dart';
+import '../services/import_engine.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,40 +13,73 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final PlanService _planService = PlanService();
+  final ImportEngine _importEngine = ImportEngine();
 
   Future<void> _importPlan() async {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['json', 'csv', 'xlsx'],
       );
 
       if (result != null) {
-        File file = File(result.files.single.path!);
-        String content = await file.readAsString();
-        Map<String, dynamic> json = jsonDecode(content);
+        String path = result.files.single.path!;
+        WeekPlan newPlan = await _importEngine.parseFile(path);
         
-        // Basic validation
-        if (json.containsKey('days') && json['days'] is List) {
-          WeekPlan newPlan = WeekPlan.fromJson(json);
-          await _planService.savePlan(newPlan);
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Plan imported successfully!')),
-            );
-          }
-        } else {
-          throw const FormatException('Invalid JSON structure');
+        if (mounted) {
+          _showPreviewDialog(newPlan);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Import Error: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     }
+  }
+
+  void _showPreviewDialog(WeekPlan plan) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(plan.weekIdentifier, style: const TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: plan.days.length,
+            itemBuilder: (context, index) {
+              final day = plan.days[index];
+              return ListTile(
+                title: Text(day.day, style: const TextStyle(color: Color(0xFFBB86FC))),
+                subtitle: Text('${day.tasks.length} tasks identified', style: const TextStyle(color: Colors.grey)),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBB86FC)),
+            onPressed: () async {
+              await _planService.savePlan(plan);
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Universal Plan Applied!')),
+                );
+              }
+            },
+            child: const Text('APPLY PLAN', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _resetToDefault() async {
@@ -74,21 +106,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'PLANNER DATA',
+              'UNIVERSAL IMPORT ENGINE',
               style: TextStyle(color: Colors.grey, letterSpacing: 1.2, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 15),
             _buildSettingsTile(
-              icon: Icons.upload_file,
-              title: 'Import JSON Plan',
-              subtitle: 'Change your weekly schedule',
+              icon: Icons.auto_awesome,
+              title: 'Universal Import',
+              subtitle: 'Import JSON, CSV, or XLSX',
               onTap: _importPlan,
             ),
             const SizedBox(height: 10),
             _buildSettingsTile(
               icon: Icons.restore,
               title: 'Restore Default',
-              subtitle: 'Reset to original Week 1 plan',
+              subtitle: 'Reset to original system plan',
               onTap: _resetToDefault,
               color: Colors.redAccent,
             ),
