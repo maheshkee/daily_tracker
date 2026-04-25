@@ -79,29 +79,54 @@ class ImportEngine {
   WeekPlan _parseXlsx(Uint8List bytes) {
     try {
       var excel = ex.Excel.decodeBytes(bytes);
+      if (excel.tables.isEmpty) {
+        throw Exception('No sheets found in Excel file.');
+      }
+      
       var sheet = excel.tables.values.first;
+      if (sheet.maxRows <= 1) {
+        throw Exception('No usable rows found in the first sheet.');
+      }
       
       Map<String, List<TaskBlock>> daysMap = {};
       
       for (var i = 1; i < sheet.maxRows; i++) {
         final row = sheet.rows[i];
-        if (row.isEmpty || row[0] == null) continue;
+        if (row.isEmpty) continue;
         
-        final dayName = row[0]!.value.toString();
+        String? getVal(int col) {
+          if (col >= row.length) return null;
+          final cell = row[col];
+          if (cell == null || cell.value == null) return null;
+          return cell.value.toString().trim();
+        }
+
+        final dayName = getVal(0);
+        if (dayName == null || dayName.isEmpty || dayName.toLowerCase() == 'day') continue;
         
+        // Skip scoring/legend rows often found at bottom
+        if (dayName.toLowerCase().contains('score') || dayName.toLowerCase().contains('wake on')) {
+          continue;
+        }
+
         daysMap[dayName] = [
-          TaskBlock(label: 'Wake Up', time: row[1]?.value.toString() ?? '', points: 1),
-          TaskBlock(label: 'Morning Study', time: '6:15-7:15', task: row[2]?.value.toString() ?? '', points: 2),
-          TaskBlock(label: 'Job', time: '9:00-5:00', task: row[3]?.value.toString() ?? '', points: 0),
-          TaskBlock(label: 'Gym', time: row[4]?.value.toString() ?? '', points: 2),
-          TaskBlock(label: 'Night Study', time: '8:15-9:00', task: row[6]?.value.toString() ?? '', points: 2),
-          TaskBlock(label: 'Sleep', time: row[7]?.value.toString() ?? '', points: 1),
+          TaskBlock(label: 'Wake Up', time: getVal(1) ?? '6:00 AM', points: 1),
+          TaskBlock(label: 'Morning Study', time: '6:15-7:15', task: getVal(2) ?? '', points: 2),
+          TaskBlock(label: 'Job', time: '9:00-5:00', task: getVal(3) ?? 'Yes', points: 0),
+          TaskBlock(label: 'Gym', time: getVal(4) ?? '6:00 PM', points: 2),
+          TaskBlock(label: 'Night Study', time: '8:15-9:00', task: getVal(6) ?? '', points: 2),
+          TaskBlock(label: 'Sleep', time: getVal(7) ?? '11:00 PM', points: 1),
         ];
+      }
+
+      if (daysMap.isEmpty) {
+        throw Exception('No valid weekday data rows identified.');
       }
 
       final dayPlans = daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList();
       return WeekPlan(weekIdentifier: 'Imported XLSX', days: dayPlans);
     } catch (e) {
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('XLSX Parsing Error: $e');
     }
   }
