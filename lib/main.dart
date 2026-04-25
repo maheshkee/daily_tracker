@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'screens/main_layout.dart';
 
 void main() {
-  runApp(const DailySystemV2());
+  runApp(const DailySystemV3());
 }
 
-class DailySystemV2 extends StatelessWidget {
-  const DailySystemV2({super.key});
+class DailySystemV3 extends StatelessWidget {
+  const DailySystemV3({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Daily System V2',
+      title: 'Daily System V3',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,

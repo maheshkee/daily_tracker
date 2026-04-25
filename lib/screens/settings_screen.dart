@@ -213,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.withValues(alpha: 0.2))),
+                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.withOpacity(0.2))),
                     child: Text(_importLogs.join('\n'), style: const TextStyle(color: Colors.green, fontSize: 10, fontFamily: 'monospace')),
                   ),
                 ],

@@ -71,7 +71,6 @@ class ImportEngine {
   }
 
   static ImportResult _parseXlsxIsolate(_XlsxIsolateParams params) {
-    // We need to re-instantiate or use static methods since we are in a new isolate
     return ImportEngine().parseXlsx(params.bytes, params.logs);
   }
 
@@ -133,26 +132,55 @@ class ImportEngine {
 
       Map<String, List<TaskBlock>> daysMap = {};
       
+      // Iterate through rows starting from index 1 (skip header at index 0)
       for (var i = 1; i < sheet.maxRows; i++) {
+        // Check bounds FIRST
+        if (i >= sheet.rows.length) {
+          logs.add('Reached end of rows array at index $i');
+          break;
+        }
+        
+        // Get the row - it might be null or empty
         final row = sheet.rows[i];
-        if (row.isEmpty) continue;
+        if (row == null) {
+          logs.add('Row $i is null, skipping');
+          continue;
+        }
+        if (row.isEmpty) {
+          logs.add('Row $i is empty, skipping');
+          continue;
+        }
 
+        // Helper function to safely extract cell value as string
         String? val(int col) {
-          if (col >= row.length || row[col] == null) return null;
-          final cellValue = row[col]!.value;
-          if (cellValue == null) return null;
-          return cellValue.toString().trim();
+          try {
+            // Extra safety: check if row still exists
+            if (row == null || col < 0 || col >= row.length) return null;
+            if (row[col] == null) return null;
+            
+            final cellValue = row[col]!.value;
+            if (cellValue == null) return null;
+            
+            final stringValue = cellValue.toString().trim();
+            return stringValue.isEmpty ? null : stringValue;
+          } catch (e) {
+            return null;
+          }
         }
 
         final day = val(0);
         if (day == null || day.isEmpty || day.toLowerCase() == 'day') continue;
         
-        if (day.toLowerCase().contains('score') || day.toLowerCase().contains('wake on')) {
-          logs.add('Reached scoring legend at row $i. Stopping.');
+        // Stop parsing at summary rows
+        if (day.toLowerCase().contains('score') || 
+            day.toLowerCase().contains('daily') ||
+            day.toLowerCase().contains('week') ||
+            day.toLowerCase().contains('notes')) {
+          logs.add('Reached summary/notes section at row $i. Stopping.');
           break;
         }
 
-        logs.add('Row $i: Identified $day');
+        logs.add('Row $i: Identified "$day"');
         
         daysMap[day] = [
           TaskBlock(label: 'Wake Up', time: val(1) ?? '6:00 AM', points: 1),
@@ -167,10 +195,14 @@ class ImportEngine {
       if (daysMap.isEmpty) return ImportResult.failure('No valid weekday rows found.', logs);
 
       return ImportResult.success(
-        WeekPlan(weekIdentifier: 'Excel Import', days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList()),
+        WeekPlan(
+          weekIdentifier: 'Excel Import', 
+          days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList()
+        ),
         logs
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      logs.add('Stack trace: $stackTrace');
       return ImportResult.failure('Excel parsing failed: $e', logs);
     }
   }

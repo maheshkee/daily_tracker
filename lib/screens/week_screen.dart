@@ -21,6 +21,12 @@ class _WeekScreenState extends State<WeekScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    // Clean up resources
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     final plan = await _planService.loadPlan();
     if (mounted) {
@@ -28,6 +34,16 @@ class _WeekScreenState extends State<WeekScreen> {
         _weekPlan = plan;
         _isLoading = false;
       });
+    }
+  }
+
+  /// Safely extract the first time from a time string
+  /// Handles cases like "6:00 AM", "6:15-7:15", etc.
+  String _extractFirstTime(String timeStr) {
+    try {
+      return timeStr.split(' ')[0];
+    } catch (e) {
+      return 'TBD';
     }
   }
 
@@ -40,13 +56,32 @@ class _WeekScreenState extends State<WeekScreen> {
       );
     }
 
+    if (_weekPlan == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F0F0F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Weekly Overview', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        body: const Center(
+          child: Text(
+            'Failed to load plan',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(_weekPlan?.weekIdentifier ?? 'Weekly Overview', 
-          style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          _weekPlan?.weekIdentifier ?? 'Weekly Overview',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: Column(
         children: [
@@ -105,6 +140,7 @@ class _WeekScreenState extends State<WeekScreen> {
       itemBuilder: (context, index) {
         final task = schedule.tasks[index];
         return Container(
+          key: ValueKey('week_task_${schedule.day}_$index'),
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -114,7 +150,7 @@ class _WeekScreenState extends State<WeekScreen> {
           child: Row(
             children: [
               Text(
-                task.time.split(' ')[0],
+                _extractFirstTime(task.time),
                 style: const TextStyle(color: Color(0xFFBB86FC), fontWeight: FontWeight.bold),
               ),
               const SizedBox(width: 20),

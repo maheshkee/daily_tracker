@@ -22,6 +22,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _initData();
   }
 
+  @override
+  void dispose() {
+    // Clean up resources
+    super.dispose();
+  }
+
   Future<void> _initData() async {
     final plan = await _planService.loadPlan();
     if (mounted) {
@@ -49,12 +55,34 @@ class _HomeScreenState extends State<HomeScreen> {
     _planService.savePlan(_weekPlan!);
   }
 
+  /// Safely extract the first time from a time string
+  /// Handles cases like "6:00 AM", "6:15-7:15", etc.
+  String _extractFirstTime(String timeStr) {
+    try {
+      return timeStr.split(' ')[0];
+    } catch (e) {
+      return 'TBD';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFF0F0F0F),
         body: Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
+      );
+    }
+
+    if (_weekPlan == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F0F0F),
+        body: Center(
+          child: Text(
+            'Failed to load plan',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
       );
     }
 
@@ -153,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context, index) {
         final task = schedule.tasks[index];
         return IntrinsicHeight(
+          key: ValueKey('task_${dayIndex}_$index'),
           child: Row(
             children: [
               _buildTimeIndicator(task, index == schedule.tasks.length - 1),
@@ -172,13 +201,13 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         children: [
           Text(
-            task.time.split(' ')[0],
+            _extractFirstTime(task.time),
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
           Expanded(
             child: Container(
               width: 2,
-              color: isLast ? Colors.transparent : Colors.grey.withValues(alpha: 0.3),
+              color: isLast ? Colors.transparent : Colors.grey.withOpacity(0.3),
             ),
           ),
         ],
@@ -198,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: task.isCompleted ? const Color(0xFF2D2D2D) : const Color(0xFF1E1E1E),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: task.isCompleted ? const Color(0xFFBB86FC).withValues(alpha: 0.5) : Colors.transparent,
+            color: task.isCompleted ? const Color(0xFFBB86FC).withOpacity(0.5) : Colors.transparent,
             width: 1,
           ),
         ),

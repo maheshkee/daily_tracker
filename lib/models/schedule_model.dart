@@ -15,11 +15,11 @@ class TaskBlock {
 
   factory TaskBlock.fromJson(Map<String, dynamic> json) {
     return TaskBlock(
-      label: json['label'],
-      time: json['time'],
-      task: json['task'],
-      points: json['points'],
-      isCompleted: json['isCompleted'] ?? false,
+      label: json['label'] as String? ?? 'Task',
+      time: json['time'] as String? ?? 'TBD',
+      task: json['task'] as String?,
+      points: json['points'] as int? ?? 0,
+      isCompleted: json['isCompleted'] as bool? ?? false,
     );
   }
 
@@ -61,8 +61,8 @@ class DayPlan {
 
   factory DayPlan.fromJson(Map<String, dynamic> json) {
     return DayPlan(
-      day: json['day'],
-      tasks: (json['tasks'] as List).map((t) => TaskBlock.fromJson(t)).toList(),
+      day: json['day'] as String? ?? 'Unknown',
+      tasks: (json['tasks'] as List? ?? []).map((t) => TaskBlock.fromJson(t)).toList(),
     );
   }
 
@@ -88,8 +88,8 @@ class WeekPlan {
 
   factory WeekPlan.fromJson(Map<String, dynamic> json) {
     return WeekPlan(
-      weekIdentifier: json['weekIdentifier'] ?? 'Week 1',
-      days: (json['days'] as List).map((d) => DayPlan.fromJson(d)).toList(),
+      weekIdentifier: json['weekIdentifier'] as String? ?? 'Week Plan',
+      days: (json['days'] as List? ?? []).map((d) => DayPlan.fromJson(d)).toList(),
     );
   }
 
