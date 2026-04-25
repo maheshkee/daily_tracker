@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' as ex;
-import 'package:pdf_text/pdf_text.dart';
 import 'package:docx_to_text/docx_to_text.dart';
 import '../models/schedule_model.dart';
 
@@ -21,10 +20,10 @@ class ImportEngine {
         return _parseXlsx(await file.readAsBytes());
       case 'txt':
         return _parseSemanticText(await file.readAsString(), 'TXT');
-      case 'pdf':
-        return _parsePdf(file);
       case 'docx':
         return _parseDocx(file);
+      case 'pdf':
+        throw Exception('PDF import is temporarily disabled for stability.');
       default:
         throw Exception('Unsupported file format: $extension');
     }
@@ -95,16 +94,6 @@ class ImportEngine {
       return WeekPlan(weekIdentifier: 'Imported XLSX', days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList());
     } catch (e) {
       throw Exception('XLSX Parsing Error: $e');
-    }
-  }
-
-  Future<WeekPlan> _parsePdf(File file) async {
-    try {
-      PDFDoc doc = await PDFDoc.fromFile(file);
-      String text = await doc.text;
-      return _parseSemanticText(text, 'PDF');
-    } catch (e) {
-      throw Exception('PDF Extraction Error: $e');
     }
   }
 

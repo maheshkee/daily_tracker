@@ -19,7 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json', 'csv', 'xlsx', 'txt', 'pdf', 'docx'],
+        allowedExtensions: ['json', 'csv', 'xlsx', 'txt', 'docx'],
       );
 
       if (result != null) {
@@ -171,7 +171,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingsTile(
               icon: Icons.psychology,
               title: 'Semantic Import',
-              subtitle: 'Import PDF, DOCX, TXT, XLSX',
+              subtitle: 'Import DOCX, TXT, XLSX (PDF Coming Soon)',
               onTap: _importPlan,
             ),
             const SizedBox(height: 10),
