@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' as ex;
 import '../models/schedule_model.dart';
@@ -13,6 +14,12 @@ class ImportResult {
 
   ImportResult.success(this.plan, this.logs) : error = null, success = true;
   ImportResult.failure(this.error, this.logs) : plan = null, success = false;
+}
+
+class _XlsxIsolateParams {
+  final Uint8List bytes;
+  final List<String> logs;
+  _XlsxIsolateParams(this.bytes, this.logs);
 }
 
 class ImportEngine {
@@ -49,7 +56,9 @@ class ImportEngine {
         case 'csv':
           return parseCsv(await file.readAsString(), logs);
         case 'xlsx':
-          return parseXlsx(await file.readAsBytes(), logs);
+          final bytes = await file.readAsBytes();
+          logs.add('Moving to background isolate for heavy XLSX parsing...');
+          return await compute(_parseXlsxIsolate, _XlsxIsolateParams(bytes, logs));
         case 'txt':
           return parseTxt(await file.readAsString(), logs);
         default:
@@ -61,6 +70,11 @@ class ImportEngine {
     }
   }
 
+  static ImportResult _parseXlsxIsolate(_XlsxIsolateParams params) {
+    // We need to re-instantiate or use static methods since we are in a new isolate
+    return ImportEngine().parseXlsx(params.bytes, params.logs);
+  }
+
   ImportResult parseJson(String content, List<String> logs) {
     try {
       final dynamic data = jsonDecode(content);
@@ -69,7 +83,6 @@ class ImportEngine {
         return ImportResult.failure('Invalid JSON: Root must be an object.', logs);
       }
 
-      // Migration: Handle "schedule" (V2) or top-level list
       if (!data.containsKey('days')) {
         if (data.containsKey('schedule')) {
           logs.add('Legacy V2 format detected. Migrating "schedule" to "days"...');
@@ -77,12 +90,14 @@ class ImportEngine {
           final List<Map<String, dynamic>> migratedDays = schedule.map((dayData) {
             return {
               'day': dayData['day'],
-              'tasks': (dayData['tasks'] as List? ?? []).map((t) => {
-                'label': t['label'],
-                'time': t['time'],
-                'task': t['task'],
-                'points': t['points'] ?? 2,
-                'isCompleted': false,
+              'tasks': (dayData['tasks'] as List? ?? []).map((t) {
+                return {
+                  'label': t['label'] ?? 'Task',
+                  'time': t['time'] ?? 'TBD',
+                  'task': t['task'],
+                  'points': t['points'] ?? 2,
+                  'isCompleted': false,
+                };
               }).toList(),
             };
           }).toList();
@@ -118,28 +133,26 @@ class ImportEngine {
 
       Map<String, List<TaskBlock>> daysMap = {};
       
-      // Map columns based on Evidence from Week1_Life_System_Planner.xlsx
-      // 0: Day, 1: Wake, 2: Morning Study, 3: Job, 4: Gym, 6: Night Study, 7: Sleep
-      
       for (var i = 1; i < sheet.maxRows; i++) {
         final row = sheet.rows[i];
         if (row.isEmpty) continue;
 
         String? val(int col) {
           if (col >= row.length || row[col] == null) return null;
-          return row[col]!.value?.toString().trim();
+          final cellValue = row[col]!.value;
+          if (cellValue == null) return null;
+          return cellValue.toString().trim();
         }
 
         final day = val(0);
         if (day == null || day.isEmpty || day.toLowerCase() == 'day') continue;
         
-        // Stop if we hit scoring section
         if (day.toLowerCase().contains('score') || day.toLowerCase().contains('wake on')) {
           logs.add('Reached scoring legend at row $i. Stopping.');
           break;
         }
 
-        logs.add('Row $i: Processing $day');
+        logs.add('Row $i: Identified $day');
         
         daysMap[day] = [
           TaskBlock(label: 'Wake Up', time: val(1) ?? '6:00 AM', points: 1),
@@ -162,7 +175,6 @@ class ImportEngine {
     }
   }
 
-  // Simplified CSV and TXT using same robust logic
   ImportResult parseCsv(String content, List<String> logs) {
     try {
       final List<List<dynamic>> rows = csv.decode(content);

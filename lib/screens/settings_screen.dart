@@ -16,9 +16,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final PlanService _planService = PlanService();
   final ImportEngine _importEngine = ImportEngine();
   List<String> _importLogs = [];
+  bool _isImporting = false;
 
   Future<void> _importPlan() async {
-    setState(() => _importLogs = ['Starting import...']);
+    setState(() {
+      _isImporting = true;
+      _importLogs = ['Initializing file picker...'];
+    });
+
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
@@ -27,12 +32,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (result != null) {
         String path = result.files.single.path!;
+        setState(() => _importLogs.add('File selected: ${path.split("/").last}. Analyzing...'));
+        
         ImportResult importResult = await _importEngine.parseFile(path);
         
-        setState(() => _importLogs = importResult.logs);
+        setState(() {
+          _importLogs = importResult.logs;
+          _isImporting = false;
+        });
 
         if (!importResult.success) {
-          _showErrorSnackBar(importResult.error ?? 'Unknown error');
+          _showErrorSnackBar(importResult.error ?? 'Analysis failed');
           return;
         }
 
@@ -40,10 +50,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _showEditablePreviewDialog(importResult.plan!);
         }
       } else {
-        setState(() => _importLogs.add('Import cancelled by user.'));
+        setState(() {
+          _importLogs.add('Import cancelled.');
+          _isImporting = false;
+        });
       }
     } catch (e) {
-      _showErrorSnackBar('Unexpected Error: $e');
+      setState(() => _isImporting = false);
+      _showErrorSnackBar('Import engine error: $e');
     }
   }
 
@@ -63,15 +77,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Import Debug Logs', style: TextStyle(color: Colors.white)),
+        title: const Text('Analysis Details', style: TextStyle(color: Colors.white)),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: _importLogs.length,
-            itemBuilder: (context, i) => Text(
-              _importLogs[i],
-              style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'monospace'),
+            itemBuilder: (context, i) => Padding(
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: Text(
+                '> ${_importLogs[i]}',
+                style: const TextStyle(color: Colors.green, fontSize: 11, fontFamily: 'monospace'),
+              ),
             ),
           ),
         ),
@@ -97,27 +114,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               itemBuilder: (context, dIdx) {
                 final day = plan.days[dIdx];
                 return ExpansionTile(
-                  title: Text(day.day, style: const TextStyle(color: Color(0xFFBB86FC))),
+                  initiallyExpanded: dIdx == 0,
+                  title: Text(day.day, style: const TextStyle(color: Color(0xFFBB86FC), fontWeight: FontWeight.bold)),
+                  subtitle: Text('${day.tasks.length} activities found', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   children: day.tasks.map((t) => ListTile(
+                    dense: true,
                     title: Text(t.label, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                    subtitle: Text('${t.time} | ${t.task ?? ""}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    subtitle: Text('${t.time} | ${t.task ?? "No description"}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   )).toList(),
                 );
               },
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL', style: TextStyle(color: Colors.grey))),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('DISCARD', style: TextStyle(color: Colors.grey))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBB86FC)),
               onPressed: () async {
                 await _planService.savePlan(plan);
                 if (context.mounted) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan Applied!')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan Activated!')));
                 }
               },
-              child: const Text('CONFIRM', style: TextStyle(color: Colors.black)),
+              child: const Text('ACTIVATE PLAN', style: TextStyle(color: Colors.black)),
             ),
           ],
         ),
@@ -137,59 +157,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('System Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Import Planner', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('IMPORT DATA', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            _buildActionCard(
-              icon: Icons.file_upload,
-              title: 'Upload Planner',
-              subtitle: 'Supports .json and .xlsx',
-              onTap: _importPlan,
-            ),
-            const SizedBox(height: 10),
-            _buildActionCard(
-              icon: Icons.code,
-              title: 'Copy JSON Template',
-              subtitle: 'Use this schema for custom plans',
-              onTap: _copyTemplate,
-            ),
-            const SizedBox(height: 30),
-            const Text('SYSTEM', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            _buildActionCard(
-              icon: Icons.restore,
-              title: 'Restore Default',
-              subtitle: 'Reset to original Week 1 plan',
-              onTap: () async {
-                await _planService.resetPlan();
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default restored.')));
-              },
-              color: Colors.redAccent,
-            ),
-            if (_importLogs.isNotEmpty) ...[
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('RECENT IMPORT LOGS', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-                  TextButton(onPressed: () => setState(() => _importLogs = []), child: const Text('CLEAR', style: TextStyle(fontSize: 10))),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('METHODS', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                const SizedBox(height: 15),
+                _buildActionCard(
+                  icon: Icons.upload_file,
+                  title: 'Upload Excel (.xlsx)',
+                  subtitle: 'Optimized for Week1_Life_System_Planner',
+                  onTap: _isImporting ? () {} : _importPlan,
+                ),
+                const SizedBox(height: 10),
+                _buildActionCard(
+                  icon: Icons.code,
+                  title: 'Custom JSON Schema',
+                  subtitle: 'Use for custom structures',
+                  onTap: _isImporting ? () {} : _importPlan,
+                ),
+                const SizedBox(height: 10),
+                _buildActionCard(
+                  icon: Icons.content_copy,
+                  title: 'Copy JSON Template',
+                  subtitle: 'Copy canonical structure to clipboard',
+                  onTap: _copyTemplate,
+                ),
+                const SizedBox(height: 30),
+                const Text('MAINTENANCE', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                const SizedBox(height: 15),
+                _buildActionCard(
+                  icon: Icons.refresh,
+                  title: 'Restore Default Plan',
+                  subtitle: 'Reset to original system defaults',
+                  onTap: () async {
+                    await _planService.resetPlan();
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('System defaults restored.')));
+                  },
+                  color: Colors.redAccent,
+                ),
+                if (_importLogs.isNotEmpty) ...[
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('ANALYSIS CONSOLE', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+                      TextButton(onPressed: () => setState(() => _importLogs = []), child: const Text('CLEAR', style: TextStyle(fontSize: 10))),
+                    ],
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.withValues(alpha: 0.2))),
+                    child: Text(_importLogs.join('\n'), style: const TextStyle(color: Colors.green, fontSize: 10, fontFamily: 'monospace')),
+                  ),
                 ],
+              ],
+            ),
+          ),
+          if (_isImporting)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFFBB86FC)),
+                    SizedBox(height: 20),
+                    Text('Analyzing file structure...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
-                child: Text(_importLogs.join('\n'), style: const TextStyle(color: Colors.green, fontSize: 10, fontFamily: 'monospace')),
-              ),
-            ],
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -197,23 +242,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildActionCard({required IconData icon, required String title, required String subtitle, required VoidCallback onTap, Color? color}) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          children: [
-            Icon(icon, color: color ?? const Color(0xFFBB86FC)),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
+      child: Opacity(
+        opacity: _isImporting ? 0.5 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12)),
+          child: Row(
+            children: [
+              Icon(icon, color: color ?? const Color(0xFFBB86FC)),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
