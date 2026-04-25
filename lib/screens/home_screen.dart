@@ -178,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Container(
               width: 2,
-              color: isLast ? Colors.transparent : Colors.grey.withOpacity(0.3),
+              color: isLast ? Colors.transparent : Colors.grey.withValues(alpha: 0.3),
             ),
           ),
         ],

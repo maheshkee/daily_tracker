@@ -28,4 +28,9 @@ class PlanService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_planKey, jsonEncode(plan.toJson()));
   }
+
+  Future<void> resetPlan() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_planKey);
+  }
 }
