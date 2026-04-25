@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/schedule_model.dart';
-import '../data/schedule_data.dart';
+import '../services/plan_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,34 +11,54 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late List<DaySchedule> _currentWeek;
-  late int _selectedDayIndex;
+  final PlanService _planService = PlanService();
+  WeekPlan? _weekPlan;
+  int _selectedDayIndex = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _currentWeek = List.from(weeklySchedule);
-    _selectedDayIndex = _getCurrentDayIndex();
+    _initData();
   }
 
-  int _getCurrentDayIndex() {
+  Future<void> _initData() async {
+    final plan = await _planService.loadPlan();
+    if (mounted) {
+      setState(() {
+        _weekPlan = plan;
+        _selectedDayIndex = _getCurrentDayIndex(plan);
+        _isLoading = false;
+      });
+    }
+  }
+
+  int _getCurrentDayIndex(WeekPlan plan) {
     String today = DateFormat('EEEE').format(DateTime.now());
-    int index = _currentWeek.indexWhere((day) => day.day == today);
+    int index = plan.days.indexWhere((day) => day.day == today);
     return index != -1 ? index : 0;
   }
 
   void _toggleTask(int dayIndex, int taskIndex) {
+    if (_weekPlan == null) return;
+    
     setState(() {
-      final task = _currentWeek[dayIndex].tasks[taskIndex];
-      _currentWeek[dayIndex].tasks[taskIndex] = task.copyWith(
-        isCompleted: !task.isCompleted,
-      );
+      final task = _weekPlan!.days[dayIndex].tasks[taskIndex];
+      task.isCompleted = !task.isCompleted;
     });
+    _planService.savePlan(_weekPlan!);
   }
 
   @override
   Widget build(BuildContext context) {
-    final todaySchedule = _currentWeek[_selectedDayIndex];
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F0F0F),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
+      );
+    }
+
+    final todaySchedule = _weekPlan!.days[_selectedDayIndex];
     
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
@@ -57,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeader(DaySchedule schedule) {
+  Widget _buildHeader(DayPlan schedule) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -84,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildScoreSection(DaySchedule schedule) {
+  Widget _buildScoreSection(DayPlan schedule) {
     double progress = schedule.maxPoints > 0 ? schedule.totalPoints / schedule.maxPoints : 0;
     
     return Container(
@@ -126,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTimeline(DaySchedule schedule, int dayIndex) {
+  Widget _buildTimeline(DayPlan schedule, int dayIndex) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       itemCount: schedule.tasks.length,
@@ -146,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTimeIndicator(ScheduleTask task, bool isLast) {
+  Widget _buildTimeIndicator(TaskBlock task, bool isLast) {
     return SizedBox(
       width: 60,
       child: Column(
@@ -166,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTaskCard(ScheduleTask task, int dayIndex, int taskIndex) {
+  Widget _buildTaskCard(TaskBlock task, int dayIndex, int taskIndex) {
     bool hasPoints = task.points > 0;
     
     return GestureDetector(
@@ -178,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: task.isCompleted ? const Color(0xFF2D2D2D) : const Color(0xFF1E1E1E),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: task.isCompleted ? const Color(0xFFBB86FC).withOpacity(0.5) : Colors.transparent,
+            color: task.isCompleted ? const Color(0xFFBB86FC).withValues(alpha: 0.5) : Colors.transparent,
             width: 1,
           ),
         ),

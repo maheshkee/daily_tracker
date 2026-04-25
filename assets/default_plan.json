@@ -1,0 +1,82 @@
+{
+  "weekIdentifier": "Week 1",
+  "days": [
+    {
+      "day": "Monday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Math(fractions/decimals)+Python basics", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Microcontroller basics", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Tuesday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Backend intro + Python input()", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Inputs/Outputs, sensors", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Wednesday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Math(percentages)+if/else", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Digital vs Analog", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Thursday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "HTTP basics + operators", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Sensor types", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Friday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Algebra + loops", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Arduino debugging", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Saturday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "API/JSON + functions", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "BLE basics", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    },
+    {
+      "day": "Sunday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Review + mini project", "points": 2, "isCompleted": false},
+        {"label": "Job 9-5", "time": "9:00 AM - 5:00 PM", "points": 0, "isCompleted": false},
+        {"label": "Gym", "time": "6:00-7:00 PM", "points": 2, "isCompleted": false},
+        {"label": "Night Study", "time": "8:15-9:00", "task": "Reflect + Plan Week2", "points": 2, "isCompleted": false},
+        {"label": "Sleep", "time": "10:30-11:00 PM", "points": 1, "isCompleted": false}
+      ]
+    }
+  ]
+}

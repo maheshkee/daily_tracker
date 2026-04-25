@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/schedule_model.dart';
-import '../data/schedule_data.dart';
+import '../services/plan_service.dart';
 
 class WeekScreen extends StatefulWidget {
   const WeekScreen({super.key});
@@ -10,22 +10,49 @@ class WeekScreen extends StatefulWidget {
 }
 
 class _WeekScreenState extends State<WeekScreen> {
+  final PlanService _planService = PlanService();
+  WeekPlan? _weekPlan;
   int _selectedDayIndex = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final plan = await _planService.loadPlan();
+    if (mounted) {
+      setState(() {
+        _weekPlan = plan;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F0F0F),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Weekly Overview', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(_weekPlan?.weekIdentifier ?? 'Weekly Overview', 
+          style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: Column(
         children: [
           _buildDaySelector(),
           Expanded(
-            child: _buildDaySchedule(weeklySchedule[_selectedDayIndex]),
+            child: _buildDaySchedule(_weekPlan!.days[_selectedDayIndex]),
           ),
         ],
       ),
@@ -38,7 +65,7 @@ class _WeekScreenState extends State<WeekScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: weeklySchedule.length,
+        itemCount: _weekPlan!.days.length,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         itemBuilder: (context, index) {
           bool isSelected = _selectedDayIndex == index;
@@ -55,7 +82,7 @@ class _WeekScreenState extends State<WeekScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    weeklySchedule[index].day.substring(0, 3).toUpperCase(),
+                    _weekPlan!.days[index].day.substring(0, 3).toUpperCase(),
                     style: TextStyle(
                       color: isSelected ? Colors.black : Colors.grey,
                       fontWeight: FontWeight.bold,
@@ -71,7 +98,7 @@ class _WeekScreenState extends State<WeekScreen> {
     );
   }
 
-  Widget _buildDaySchedule(DaySchedule schedule) {
+  Widget _buildDaySchedule(DayPlan schedule) {
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: schedule.tasks.length,

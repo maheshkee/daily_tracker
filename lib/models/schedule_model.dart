@@ -1,11 +1,11 @@
-class ScheduleTask {
+class TaskBlock {
   final String label;
   final String time;
   final String? task;
   final int points;
-  final bool isCompleted;
+  bool isCompleted;
 
-  ScheduleTask({
+  TaskBlock({
     required this.label,
     required this.time,
     this.task,
@@ -13,8 +13,28 @@ class ScheduleTask {
     this.isCompleted = false,
   });
 
-  ScheduleTask copyWith({bool? isCompleted}) {
-    return ScheduleTask(
+  factory TaskBlock.fromJson(Map<String, dynamic> json) {
+    return TaskBlock(
+      label: json['label'],
+      time: json['time'],
+      task: json['task'],
+      points: json['points'],
+      isCompleted: json['isCompleted'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'label': label,
+      'time': time,
+      'task': task,
+      'points': points,
+      'isCompleted': isCompleted,
+    };
+  }
+
+  TaskBlock copyWith({bool? isCompleted}) {
+    return TaskBlock(
       label: label,
       time: time,
       task: task,
@@ -24,15 +44,53 @@ class ScheduleTask {
   }
 }
 
-class DaySchedule {
+class DayPlan {
   final String day;
-  final List<ScheduleTask> tasks;
+  final List<TaskBlock> tasks;
 
-  DaySchedule({
+  DayPlan({
     required this.day,
     required this.tasks,
   });
 
+  factory DayPlan.fromJson(Map<String, dynamic> json) {
+    return DayPlan(
+      day: json['day'],
+      tasks: (json['tasks'] as List).map((t) => TaskBlock.fromJson(t)).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'day': day,
+      'tasks': tasks.map((t) => t.toJson()).toList(),
+    };
+  }
+
   int get totalPoints => tasks.where((t) => t.isCompleted).fold(0, (sum, t) => sum + t.points);
   int get maxPoints => tasks.fold(0, (sum, t) => sum + t.points);
+}
+
+class WeekPlan {
+  final String weekIdentifier;
+  final List<DayPlan> days;
+
+  WeekPlan({
+    required this.weekIdentifier,
+    required this.days,
+  });
+
+  factory WeekPlan.fromJson(Map<String, dynamic> json) {
+    return WeekPlan(
+      weekIdentifier: json['weekIdentifier'] ?? 'Week 1',
+      days: (json['days'] as List).map((d) => DayPlan.fromJson(d)).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'weekIdentifier': weekIdentifier,
+      'days': days.map((d) => d.toJson()).toList(),
+    };
+  }
 }
