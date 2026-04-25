@@ -19,21 +19,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json', 'csv', 'xlsx', 'txt', 'docx'],
+        allowedExtensions: ['json', 'csv', 'xlsx', 'txt'],
       );
 
       if (result != null) {
         String path = result.files.single.path!;
-        WeekPlan newPlan = await _importEngine.parseFile(path);
+        ImportResult importResult = await _importEngine.parseFile(path);
         
-        if (mounted) {
-          _showEditablePreviewDialog(newPlan);
+        if (!importResult.success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Import Failed: ${importResult.error}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          return;
+        }
+
+        if (mounted && importResult.plan != null) {
+          _showEditablePreviewDialog(importResult.plan!);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import Error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Unexpected Error: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     }
@@ -69,15 +82,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ...day.tasks.asMap().entries.map((entry) {
                       int taskIdx = entry.key;
                       TaskBlock task = entry.value;
-                      bool isUncertain = task.label == 'Activity';
+                      bool isLowQuality = task.label == 'Activity' || task.time == 'TBD';
                       
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: isUncertain ? Colors.orange.withValues(alpha: 0.1) : Colors.black26,
+                          color: isLowQuality ? Colors.orange.withValues(alpha: 0.1) : Colors.black26,
                           borderRadius: BorderRadius.circular(8),
-                          border: isUncertain ? Border.all(color: Colors.orange.withValues(alpha: 0.5)) : null,
+                          border: isLowQuality ? Border.all(color: Colors.orange.withValues(alpha: 0.5)) : null,
                         ),
                         child: Column(
                           children: [
@@ -102,10 +115,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ],
                             ),
-                            if (isUncertain)
+                            if (isLowQuality)
                               const Padding(
                                 padding: EdgeInsets.only(top: 4),
-                                child: Text('⚠️ Uncertain task type', style: TextStyle(color: Colors.orange, fontSize: 10)),
+                                child: Text('⚠️ Please review activity details', style: TextStyle(color: Colors.orange, fontSize: 10)),
                               ),
                           ],
                         ),
@@ -128,11 +141,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Semantic Plan Applied!')),
+                    const SnackBar(content: Text('New Plan Applied Successfully!')),
                   );
                 }
               },
-              child: const Text('APPLY PLAN', style: TextStyle(color: Colors.black)),
+              child: const Text('CONFIRM & APPLY', style: TextStyle(color: Colors.black)),
             ),
           ],
         ),
@@ -156,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('System Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -164,14 +177,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'UNIVERSAL SEMANTIC IMPORT',
+              'PLANNER IMPORT ENGINE',
               style: TextStyle(color: Colors.grey, letterSpacing: 1.2, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 15),
             _buildSettingsTile(
-              icon: Icons.psychology,
-              title: 'Semantic Import',
-              subtitle: 'Import DOCX, TXT, XLSX (PDF Coming Soon)',
+              icon: Icons.upload_file,
+              title: 'Import Planner',
+              subtitle: 'Supports JSON, TXT, CSV, XLSX',
               onTap: _importPlan,
             ),
             const SizedBox(height: 10),
