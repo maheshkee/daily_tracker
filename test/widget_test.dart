@@ -9,7 +9,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const DailySystemApp());
+    await tester.pumpWidget(const DailySystemV2());
     
     // Wait for the async initialization to complete
     await tester.pumpAndSettle();
