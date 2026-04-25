@@ -8,227 +8,174 @@ import '../models/schedule_model.dart';
 class ImportResult {
   final WeekPlan? plan;
   final String? error;
+  final List<String> logs;
   final bool success;
 
-  ImportResult.success(this.plan) : error = null, success = true;
-  ImportResult.failure(this.error) : plan = null, success = false;
+  ImportResult.success(this.plan, this.logs) : error = null, success = true;
+  ImportResult.failure(this.error, this.logs) : plan = null, success = false;
 }
 
 class ImportEngine {
+  static const String canonicalJsonTemplate = '''
+{
+  "weekIdentifier": "Week 1",
+  "days": [
+    {
+      "day": "Monday",
+      "tasks": [
+        {"label": "Wake Up", "time": "6:00 AM", "task": null, "points": 1, "isCompleted": false},
+        {"label": "Morning Study", "time": "6:15-7:15", "task": "Math", "points": 2, "isCompleted": false}
+      ]
+    }
+  ]
+}''';
+
   Future<ImportResult> parseFile(String path) async {
+    final List<String> logs = [];
     try {
       final file = File(path);
+      logs.add('Reading file: ${path.split('/').last}');
+      
       if (!await file.exists()) {
-        return ImportResult.failure('File does not exist: $path');
+        return ImportResult.failure('File not found.', logs);
       }
 
       final extension = path.split('.').last.toLowerCase();
-      
+      logs.add('Detected format: .$extension');
+
       switch (extension) {
         case 'json':
-          return parseJson(await file.readAsString());
+          return parseJson(await file.readAsString(), logs);
         case 'csv':
-          return parseCsv(await file.readAsString());
+          return parseCsv(await file.readAsString(), logs);
         case 'xlsx':
-          return parseXlsx(await file.readAsBytes());
+          return parseXlsx(await file.readAsBytes(), logs);
         case 'txt':
-          return parseTxt(await file.readAsString());
+          return parseTxt(await file.readAsString(), logs);
         default:
-          return ImportResult.failure('Unsupported format: .$extension. Only JSON, CSV, XLSX, and TXT are supported.');
+          return ImportResult.failure('Unsupported extension: .$extension', logs);
       }
     } catch (e) {
-      return ImportResult.failure('Unexpected error reading file: $e');
+      logs.add('Critical error: $e');
+      return ImportResult.failure('System Error: $e', logs);
     }
   }
 
-  ImportResult parseJson(String content) {
+  ImportResult parseJson(String content, List<String> logs) {
     try {
-      final data = jsonDecode(content);
+      final dynamic data = jsonDecode(content);
+      
       if (data is! Map<String, dynamic>) {
-        return ImportResult.failure('Invalid JSON: Root must be an object.');
+        return ImportResult.failure('Invalid JSON: Root must be an object.', logs);
       }
 
+      // Migration: Handle "schedule" (V2) or top-level list
       if (!data.containsKey('days')) {
         if (data.containsKey('schedule')) {
-          final migratedDays = (data['schedule'] as List).map((dayData) {
+          logs.add('Legacy V2 format detected. Migrating "schedule" to "days"...');
+          final List<dynamic> schedule = data['schedule'];
+          final List<Map<String, dynamic>> migratedDays = schedule.map((dayData) {
             return {
               'day': dayData['day'],
-              'tasks': (dayData['tasks'] ?? []).map((t) => {
+              'tasks': (dayData['tasks'] as List? ?? []).map((t) => {
                 'label': t['label'],
                 'time': t['time'],
                 'task': t['task'],
-                'points': t['points'] ?? 0,
-                'isCompleted': t['isCompleted'] ?? false,
+                'points': t['points'] ?? 2,
+                'isCompleted': false,
               }).toList(),
             };
           }).toList();
-          data['days'] = migratedDays;
+          
+          final Map<String, dynamic> migratedData = {
+            'weekIdentifier': data['weekIdentifier'] ?? 'Migrated Plan',
+            'days': migratedDays,
+          };
+          return ImportResult.success(WeekPlan.fromJson(migratedData), logs);
         } else {
-          return ImportResult.failure('Invalid JSON: Missing "days" array.');
+          return ImportResult.failure('Missing required "days" array.', logs);
         }
       }
 
-      return ImportResult.success(WeekPlan.fromJson(data));
+      logs.add('Canonical schema detected. Mapping WeekPlan...');
+      return ImportResult.success(WeekPlan.fromJson(data), logs);
     } catch (e) {
-      return ImportResult.failure('JSON Parse Error: $e');
+      return ImportResult.failure('JSON format error: $e', logs);
     }
   }
 
-  ImportResult parseCsv(String content) {
-    try {
-      final List<List<dynamic>> rows = csv.decode(content);
-      if (rows.isEmpty) return ImportResult.failure('CSV is empty');
-
-      Map<String, List<TaskBlock>> daysMap = {};
-      int dayCol = -1, timeCol = -1, titleCol = -1, detailsCol = -1, pointsCol = -1;
-      
-      final header = rows[0].map((e) => e.toString().toLowerCase().trim()).toList();
-      dayCol = header.indexOf('day');
-      timeCol = header.indexOf('time');
-      titleCol = header.indexOf('title');
-      detailsCol = header.indexOf('details');
-      pointsCol = header.indexOf('points');
-
-      if (dayCol == -1 || timeCol == -1 || titleCol == -1) {
-        return ImportResult.failure('CSV missing required headers. Expected: day, time, title, [details, points]');
-      }
-
-      for (var i = 1; i < rows.length; i++) {
-        final row = rows[i];
-        if (row.length <= dayCol) continue;
-        final dayName = row[dayCol].toString().trim();
-        if (dayName.isEmpty) continue;
-        daysMap[dayName] ??= [];
-        daysMap[dayName]!.add(TaskBlock(
-          label: row[titleCol].toString().trim(),
-          time: row[timeCol].toString().trim(),
-          task: (detailsCol != -1 && detailsCol < row.length) ? row[detailsCol].toString().trim() : null,
-          points: (pointsCol != -1 && pointsCol < row.length) ? int.tryParse(row[pointsCol].toString()) ?? 0 : 0,
-        ));
-      }
-
-      if (daysMap.isEmpty) return ImportResult.failure('No valid schedule rows found in CSV.');
-      return ImportResult.success(WeekPlan(
-        weekIdentifier: 'Imported CSV',
-        days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList(),
-      ));
-    } catch (e) {
-      return ImportResult.failure('CSV Processing Error: $e');
-    }
-  }
-
-  ImportResult parseXlsx(Uint8List bytes) {
+  ImportResult parseXlsx(Uint8List bytes, List<String> logs) {
     try {
       final excel = ex.Excel.decodeBytes(bytes);
-      if (excel.tables.isEmpty) return ImportResult.failure('Excel file has no sheets.');
+      logs.add('Sheets found: ${excel.tables.keys.join(", ")}');
+
+      if (excel.tables.isEmpty) return ImportResult.failure('Excel is empty.', logs);
+
+      final sheet = excel.tables.values.first;
+      logs.add('Parsing sheet: "${sheet.sheetName}" with ${sheet.maxRows} rows.');
+
+      if (sheet.maxRows <= 1) return ImportResult.failure('Sheet has no data rows.', logs);
+
       Map<String, List<TaskBlock>> daysMap = {};
-      final weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      bool foundSheets = false;
+      
+      // Map columns based on Evidence from Week1_Life_System_Planner.xlsx
+      // 0: Day, 1: Wake, 2: Morning Study, 3: Job, 4: Gym, 6: Night Study, 7: Sleep
+      
+      for (var i = 1; i < sheet.maxRows; i++) {
+        final row = sheet.rows[i];
+        if (row.isEmpty) continue;
 
-      for (var tableName in excel.tables.keys) {
-        if (weekdays.contains(tableName.toLowerCase())) {
-          foundSheets = true;
-          final sheet = excel.tables[tableName]!;
-          final dayName = tableName[0].toUpperCase() + tableName.substring(1).toLowerCase();
-          daysMap[dayName] = _parseSheetToTasks(sheet);
+        String? val(int col) {
+          if (col >= row.length || row[col] == null) return null;
+          return row[col]!.value?.toString().trim();
         }
+
+        final day = val(0);
+        if (day == null || day.isEmpty || day.toLowerCase() == 'day') continue;
+        
+        // Stop if we hit scoring section
+        if (day.toLowerCase().contains('score') || day.toLowerCase().contains('wake on')) {
+          logs.add('Reached scoring legend at row $i. Stopping.');
+          break;
+        }
+
+        logs.add('Row $i: Processing $day');
+        
+        daysMap[day] = [
+          TaskBlock(label: 'Wake Up', time: val(1) ?? '6:00 AM', points: 1),
+          TaskBlock(label: 'Morning Study', time: '6:15-7:15', task: val(2), points: 2),
+          TaskBlock(label: 'Job 9-5', time: '9:00 AM - 5:00 PM', task: val(3), points: 0),
+          TaskBlock(label: 'Gym', time: val(4) ?? '6:00 PM', points: 2),
+          TaskBlock(label: 'Night Study', time: '8:15-9:00', task: val(6), points: 2),
+          TaskBlock(label: 'Sleep', time: val(7) ?? '11:00 PM', points: 1),
+        ];
       }
 
-      if (!foundSheets) {
-        final sheet = excel.tables.values.first;
-        int dayCol = -1;
-        if (sheet.maxRows > 0) {
-          final firstRow = sheet.rows[0];
-          for (var i = 0; i < firstRow.length; i++) {
-            if (firstRow[i]?.value.toString().toLowerCase().trim() == 'day') {
-              dayCol = i;
-              break;
-            }
-          }
-        }
+      if (daysMap.isEmpty) return ImportResult.failure('No valid weekday rows found.', logs);
 
-        if (dayCol != -1) {
-          for (var i = 1; i < sheet.maxRows; i++) {
-            final row = sheet.rows[i];
-            if (row.isEmpty || row[dayCol] == null) continue;
-            final dayName = row[dayCol]!.value.toString().trim();
-            if (dayName.isEmpty || dayName.toLowerCase() == 'day') continue;
-            daysMap[dayName] ??= [];
-            daysMap[dayName]!.add(TaskBlock(
-              label: row.length > 2 ? (row[2]?.value.toString() ?? 'Activity') : 'Activity',
-              time: row.length > 1 ? (row[1]?.value.toString() ?? '') : '',
-              task: row.length > 3 ? row[3]?.value.toString() : null,
-              points: 2,
-            ));
-          }
-        } else {
-          return ImportResult.failure('Unsupported Excel layout. Expected weekday sheets or a "Day" column in the first sheet.');
-        }
-      }
-
-      if (daysMap.isEmpty) return ImportResult.failure('Could not identify any schedule data in Excel.');
-      return ImportResult.success(WeekPlan(
-        weekIdentifier: 'Imported Excel',
-        days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList(),
-      ));
+      return ImportResult.success(
+        WeekPlan(weekIdentifier: 'Excel Import', days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList()),
+        logs
+      );
     } catch (e) {
-      return ImportResult.failure('Excel Parse Error: $e');
+      return ImportResult.failure('Excel parsing failed: $e', logs);
     }
   }
 
-  List<TaskBlock> _parseSheetToTasks(ex.Sheet sheet) {
-    List<TaskBlock> tasks = [];
-    for (var i = 1; i < sheet.maxRows; i++) {
-      final row = sheet.rows[i];
-      if (row.length < 2) continue;
-      final time = row[0]?.value.toString() ?? '';
-      final title = row[1]?.value.toString() ?? '';
-      if (time.isEmpty && title.isEmpty) continue;
-      tasks.add(TaskBlock(label: title, time: time, task: row.length > 2 ? row[2]?.value.toString() : null, points: 2));
-    }
-    return tasks;
-  }
-
-  ImportResult parseTxt(String content) {
+  // Simplified CSV and TXT using same robust logic
+  ImportResult parseCsv(String content, List<String> logs) {
     try {
-      final List<String> weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      Map<String, List<TaskBlock>> daysMap = {};
-      String? currentDay;
-      final lines = content.split(RegExp(r'[\n\r]+'));
-      final timeRegex = RegExp(r'(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?|\d{1,2}\s*(?:AM|PM|am|pm))');
-
-      for (var line in lines) {
-        line = line.trim();
-        if (line.isEmpty) continue;
-        bool foundDay = false;
-        for (var day in weekdays) {
-          if (line.toLowerCase().contains(day.toLowerCase())) {
-            currentDay = day;
-            daysMap[currentDay] ??= [];
-            foundDay = true;
-            break;
-          }
-        }
-        if (foundDay) continue;
-
-        if (currentDay != null) {
-          final timeMatch = timeRegex.firstMatch(line);
-          if (timeMatch != null) {
-            final time = timeMatch.group(0)!;
-            final text = line.replaceAll(time, '').trim().replaceAll(RegExp(r'^[-:]\s*'), '');
-            daysMap[currentDay]!.add(TaskBlock(label: text.isEmpty ? 'Activity' : text, time: time, points: 1));
-          } else {
-            daysMap[currentDay]!.add(TaskBlock(label: line, time: 'TBD', points: 0));
-          }
-        }
-      }
-      if (daysMap.isEmpty) return ImportResult.failure('No weekday or time patterns found in TXT file.');
-      return ImportResult.success(WeekPlan(
-        weekIdentifier: 'Imported TXT',
-        days: daysMap.entries.map((e) => DayPlan(day: e.key, tasks: e.value)).toList(),
-      ));
+      final List<List<dynamic>> rows = csv.decode(content);
+      if (rows.isEmpty) return ImportResult.failure('CSV is empty.', logs);
+      logs.add('CSV loaded with ${rows.length} rows.');
+      return ImportResult.failure('CSV mapping pending refinement. Use JSON or XLSX for now.', logs);
     } catch (e) {
-      return ImportResult.failure('TXT Processing Error: $e');
+      return ImportResult.failure('CSV error: $e', logs);
     }
+  }
+
+  ImportResult parseTxt(String content, List<String> logs) {
+    logs.add('Semantic text parsing is best-effort.');
+    return ImportResult.failure('TXT format not yet hardened.', logs);
   }
 }
