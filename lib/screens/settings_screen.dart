@@ -27,7 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json', 'xlsx'],
+        allowedExtensions: ['json', 'xlsx', 'txt'],
       );
 
       if (result != null) {
@@ -43,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         if (!importResult.success) {
           _showErrorSnackBar(importResult.error ?? 'Analysis failed');
+          _showLogsDialog(errorSuggestion: _getSuggestionForError(importResult.error));
           return;
         }
 
@@ -61,35 +62,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  String? _getSuggestionForError(String? error) {
+    if (error == null) return null;
+    final e = error.toLowerCase();
+    if (e.contains('empty')) return 'Suggestion: Your file seems to have no data. Try using the canonical JSON template.';
+    if (e.contains('weekday') || e.contains('rows')) return 'Suggestion: Ensure your file has a "Day" column and at least one task row.';
+    if (e.contains('extension')) return 'Suggestion: Use .json, .xlsx, or .txt files for importing plans.';
+    if (e.contains('format')) return 'Suggestion: Check your JSON syntax. Use the "Copy Template" tool for a valid structure.';
+    return null;
+  }
+
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(label: 'LOGS', textColor: Colors.white, onPressed: _showLogsDialog),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(label: 'LOGS', textColor: Colors.white, onPressed: () => _showLogsDialog()),
       ),
     );
   }
 
-  void _showLogsDialog() {
+  void _showLogsDialog({String? errorSuggestion}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Analysis Details', style: TextStyle(color: Colors.white)),
+        title: const Text('Analysis Console', style: TextStyle(color: Colors.white)),
         content: SizedBox(
           width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _importLogs.length,
-            itemBuilder: (context, i) => Padding(
-              padding: const EdgeInsets.only(bottom: 4.0),
-              child: Text(
-                '> ${_importLogs[i]}',
-                style: const TextStyle(color: Colors.green, fontSize: 11, fontFamily: 'monospace'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (errorSuggestion != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Text(errorSuggestion, style: const TextStyle(color: Colors.blueAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 15),
+              ],
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _importLogs.length,
+                    itemBuilder: (context, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4.0),
+                      child: Text(
+                        '> ${_importLogs[i]}',
+                        style: const TextStyle(color: Colors.green, fontSize: 11, fontFamily: 'monospace'),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
         actions: [
@@ -97,6 +128,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _exportCurrentPlan() async {
+    final plan = await _planService.loadPlan();
+    final jsonStr = jsonEncode(plan.toJson());
+    Clipboard.setData(ClipboardData(text: jsonStr));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Current plan exported to clipboard as JSON!'))
+      );
+    }
   }
 
   void _showEditablePreviewDialog(WeekPlan plan) {
@@ -187,6 +229,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Copy JSON Template',
                   subtitle: 'Copy canonical structure to clipboard',
                   onTap: _copyTemplate,
+                ),
+                const SizedBox(height: 10),
+                _buildActionCard(
+                  icon: Icons.file_download,
+                  title: 'Export Current Plan',
+                  subtitle: 'Save your current schedule as JSON',
+                  onTap: _exportCurrentPlan,
                 ),
                 const SizedBox(height: 30),
                 const Text('MAINTENANCE', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
